@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📸每日图片推荐</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#181825;color:#fff;padding:22px;min-height:100vh}
+.container{max-width:680px;margin:0 auto;margin-top:24px}
+.card{background:#28283d;padding:24px;border-radius:14px}
+h1{text-align:center;font-size:22px;margin-bottom:20px;color:#e2e8f0}
+
+.calendar-wrap{margin-bottom:18px}
+.calendar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.calendar-header button{width:auto;padding:6px 12px;background:#383852;color:#fff;border:none;border-radius:6px}
+.curYM{font-size:17px}
+.calendar-grid{
+  display:grid;
+  grid-template-columns: repeat(7,1fr);
+  gap:6px;
+}
+.cal-day{
+  aspect-ratio:1/1;
+  border-radius:8px;
+  border:none;
+  background:#383852;
+  color:#fff;
+  font-size:14px;
+}
+.cal-day.enable{background:#2563eb;cursor:pointer}
+.cal-day.selected{background:#4ade80;color:#000}
+.cal-day.today-mark{border:2px solid #fbbf24;}
+.cal-day:disabled{opacity:0.25}
+
+.item-gap{margin:14px 0}
+input{
+  width:100%;padding:13px 12px;font-size:16px;border-radius:10px;
+  border:none;background:#383852;color:#fff;
+}
+button{
+  width:100%;padding:13px;border:none;border-radius:10px;
+  background:#2563eb;color:#fff;font-size:16px;cursor:pointer;
+}
+button:active{background:#1d4ed8}
+
+.err-text{color:#fb7185;margin-top:10px}
+.success-tip{color:#4ade80;margin-top:8px}
+.tip-text{color:#a5b4fc;font-size:14px;margin-top:6px}
+.hidden{display:none !important;}
+
+.photo-grid{
+  margin-top:20px;
+  display:grid;
+  grid-template-columns: repeat(auto-fill,minmax(140px,1fr));
+  gap:12px;
+}
+.photo-item{
+  background:#1e1e30;
+  border-radius:10px;
+  overflow:hidden;
+}
+.photo-item img{
+  width:100%;
+  display:block;
+}
+.tag-wrap{
+  padding:8px 10px;
+}
+.tag{
+  display:inline-block;
+  font-size:12px;
+  background:#3b82f640;
+  color:#93c5fd;
+  padding:2px 7px;
+  border-radius:4px;
+  margin-right:4px;
+  margin-bottom:4px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+  <h1>📸每日图片推荐</h1>
+
+  <div class="calendar-wrap">
+    <div class="calendar-header">
+      <button id="prevMonth">◀ 上月</button>
+      <div class="curYM" id="ymText"></div>
+      <button id="nextMonth">下月 ▶</button>
+    </div>
+    <div class="calendar-grid" id="calGrid"></div>
+  </div>
+
+  <div id="pwdArea" class="item-gap hidden">
+    <label>输入当日访问密码</label>
+    <input type="password" id="pwdInput" placeholder="请输入该日期密码">
+    <div class="tip-text">已选中日期：<span id="curDateText"></span></div>
+  </div>
+
+  <div id="btnArea" class="hidden">
+    <button id="unlockBtn">🔓解锁查看当日图集</button>
+  </div>
+
+  <div class="err-text" id="errDom"></div>
+  <div class="success-tip" id="okDom"></div>
+
+  <div id="photoContainer" class="photo-grid"></div>
+</div>
+</div>
+
+<script>
+// 测试配置！这里全部是键盘手打普通减号 -
+const dateConfig = [
+  {
+    date:"2026-09-28",
+    pwd:"123456",
+    images:[
+      {imgFile:"20260928_01.jpg", tags:["测试图"]}
+    ]
+  }
+];
+
+const prevMonthBtn = document.getElementById('prevMonth');
+const nextMonthBtn = document.getElementById('nextMonth');
+const ymText = document.getElementById('ymText');
+const calGrid = document.getElementById('calGrid');
+
+const pwdArea = document.getElementById('pwdArea');
+const curDateText = document.getElementById('curDateText');
+const btnArea = document.getElementById('btnArea');
+const unlockBtn = document.getElementById('unlockBtn');
+const pwdInput = document.getElementById('pwdInput');
+const errDom = document.getElementById('errDom');
+const okDom = document.getElementById('okDom');
+const photoContainer = document.getElementById('photoContainer');
+
+const today = new Date();
+let viewYear = today.getFullYear();
+let viewMonth = today.getMonth();
+let selectedDateInfo = null;
+
+const todayStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+function clearPhotos(){
+  photoContainer.innerHTML = "";
+}
+
+function renderCalendar(){
+  calGrid.innerHTML = "";
+  ymText.innerText = `${viewYear}年${viewMonth+1}月`;
+  const first = new Date(viewYear, viewMonth, 1);
+  const last = new Date(viewYear, viewMonth+1, 0);
+  const firstWeek = first.getDay();
+
+  ['日','一','二','三','四','五','六'].forEach(w=>{
+    const span = document.createElement('div');
+    span.style.textAlign="center";
+    span.style.fontSize="13px";
+    span.style.padding="4px 0";
+    span.innerText=w;
+    calGrid.appendChild(span);
+  })
+
+  for(let i=0;i<firstWeek;i++){
+    const empty = document.createElement('button');
+    empty.disabled=true;
+    empty.className="cal-day";
+    calGrid.appendChild(empty);
+  }
+
+  const totalDay = last.getDate();
+  for(let d=1;d<=totalDay;d++){
+    const btn = document.createElement('button');
+    btn.className="cal-day";
+    btn.innerText = String(d);
+    const dateStr = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+    if(dateStr === todayStr){
+      btn.classList.add("today-mark");
+    }
+
+    const findCfg = dateConfig.find(item=>item.date === dateStr);
+    if(findCfg){
+      btn.classList.add("enable");
+      btn.onclick = ()=>{
+        errDom.textContent = "";
+        okDom.textContent = "";
+        clearPhotos();
+        selectedDateInfo = findCfg;
+        curDateText.innerText = dateStr;
+        pwdArea.classList.remove('hidden');
+        btnArea.classList.remove('hidden');
+        pwdInput.value = "";
+        document.querySelectorAll('.cal-day.selected').forEach(b=>b.classList.remove('selected'));
+        btn.classList.add('selected');
+      }
+    }else{
+      btn.disabled=true;
+    }
+    calGrid.appendChild(btn);
+  }
+}
+
+prevMonthBtn.onclick = ()=>{
+  viewMonth--;
+  if(viewMonth<0){ viewMonth=11; viewYear--; }
+  renderCalendar();
+}
+nextMonthBtn.onclick = ()=>{
+  viewMonth++;
+  if(viewMonth>11){ viewMonth=0; viewYear++; }
+  renderCalendar();
+}
+
+unlockBtn.onclick = function(){
+  errDom.textContent = "";
+  okDom.textContent = "";
+  clearPhotos();
+  if(!selectedDateInfo) return;
+
+  const inputPwd = pwdInput.value.trim();
+  if(inputPwd === selectedDateInfo.pwd){
+    okDom.textContent = `✅密码正确，共加载${selectedDateInfo.images.length}张图片`;
+    selectedDateInfo.images.forEach(imgItem=>{
+      const div = document.createElement('div');
+      div.className = "photo-item";
+      div.innerHTML = `
+        <img src="./${imgItem.imgFile}" loading="lazy">
+        <div class="tag-wrap">
+          ${imgItem.tags.map(t=>`<span class="tag">${t}</span>`).join('')}
+        </div>
+      `;
+      photoContainer.appendChild(div);
+    })
+  }else{
+    errDom.textContent = "❌密码错误，请核对该日期密码";
+  }
+}
+
+renderCalendar();
+</script>
+</body>
+</html>
